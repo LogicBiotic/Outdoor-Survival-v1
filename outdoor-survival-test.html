@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Outdoor Survival V1</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			background: #e7f3e7;
+			color: #222;
+			margin: 0;
+			padding: 0;
+		}
+
+		.container {
+			max-width: 600px;
+			margin: 30px auto;
+			background: #fff;
+			border-radius: 8px;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+			padding: 24px;
+		}
+
+		h1 {
+			text-align: center;
+			margin-bottom: 16px;
+		}
+
+		.stats,
+		.resources {
+			display: flex;
+			justify-content: space-between;
+			margin-bottom: 12px;
+		}
+
+		.actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-bottom: 16px;
+		}
+
+		.actions button,
+		.actions input[type=checkbox]+label {
+			background: #4caf50;
+			color: #fff;
+			border: none;
+			border-radius: 4px;
+			padding: 8px 14px;
+			cursor: pointer;
+			font-size: 1em;
+			transition: background 0.2s;
+		}
+
+		.actions button:disabled {
+			background: #aaa;
+			cursor: not-allowed;
+		}
+
+		.actions input[type=checkbox] {
+			display: none;
+		}
+
+		.actions input[type=checkbox]+label {
+			background: #2196f3;
+			margin-right: 0;
+		}
+
+		.actions input[type=checkbox]:checked+label {
+			background: #1976d2;
+		}
+
+		.flavor {
+			min-height: 32px;
+			margin-bottom: 12px;
+			font-style: italic;
+			color: #555;
+		}
+
+		.progress {
+			background: #eee;
+			border-radius: 4px;
+			overflow: hidden;
+			margin-bottom: 8px;
+		}
+
+		.progress-bar {
+			height: 16px;
+			background: #4caf50;
+			transition: width 0.3s;
+		}
+
+		.build-status {
+			margin-bottom: 8px;
+		}
+
+		.rescue {
+			font-weight: bold;
+			color: #d84315;
+			margin-bottom: 8px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>Outdoor Survival V1</h1>
+		<div class="stats">
+			<div style="flex:1; margin-right:8px;">HP:
+				<div class="progress">
+					<div class="progress-bar" id="hp-bar" style="width:100%;background:#d84315;"></div>
+				</div>
+			</div>
+			<div style="flex:1; margin-right:8px;">Hunger:
+				<div class="progress">
+					<div class="progress-bar" id="hunger-bar" style="width:80%;background:#ffb300;"></div>
+				</div>
+			</div>
+			<div style="flex:1; margin-right:8px;">Thirst:
+				<div class="progress">
+					<div class="progress-bar" id="thirst-bar" style="width:80%;background:#2196f3;"></div>
+				</div>
+			</div>
+			<div style="flex:1;">Stamina:
+				<div class="progress">
+					<div class="progress-bar" id="stamina-bar" style="width:100%;background:#43a047;"></div>
+				</div>
+			</div>
+		</div>
+		<div class="resources">
+			<div>Food: <span id="food">0</span></div>
+			<div>Water: <span id="water">0</span></div>
+			<div>Mats: <span id="mats">0</span></div>
+		</div>
+		<div class="build-status">
+			<div>Shelter: <span id="shelter-status">Not built</span></div>
+			<div>Fire Pit: <span id="firepit-status">Not built</span></div>
+			<div>Signal Fire: <span id="signalfire-status">Not built</span></div>
+			<div>Fire Time Left:
+				<div class="progress" style="margin-top:2px;">
+					<div class="progress-bar" id="firetime-bar" style="width:0%;background:#ff7043;"></div>
+				</div>
+				<span id="firetime">0</span>s
+			</div>
+		</div>
+		<div class="rescue">Rescue Chance: <span id="rescue-chance">0.00</span>%</div>
+		<div class="actions">
+			<input type="checkbox" id="forage-food"><label for="forage-food">Forage Food</label>
+			<input type="checkbox" id="eat-food"><label for="eat-food">Eat Food</label>
+			<input type="checkbox" id="gather-water"><label for="gather-water">Gather Water</label>
+			<input type="checkbox" id="drink-water"><label for="drink-water">Drink Water</label>
+			<input type="checkbox" id="gather-mats"><label for="gather-mats">Gather Mats</label>
+			<input type="checkbox" id="rest"><label for="rest">Rest</label>
+			<input type="checkbox" id="build"><label for="build">Build</label>
+			<button id="stoke-fire-btn" disabled>Stoke Fire</button>
+		</div>
+		<div class="progress" id="build-progress" style="display:none;">
+			<div class="progress-bar" id="build-bar" style="width:0%;background:#8d6e63;"></div>
+		</div>
+		<div class="flavor" id="flavor"></div>
+	</div>
+	<script>
+		// Game state
+		let hp = 100, hunger = 80, thirst = 80, stamina = 100;
+		let food = 0, water = 0, mats = 0;
+		let shelterBuilt = false, firePitBuilt = false, signalFireBuilt = false;
+		let building = false, buildType = null, buildTime = 0, buildTotal = 0;
+		let fireTime = 0;
+		let rescueChance = 0;
+		let rescueUnlocked = false;
+		let rescueBaseChance = 0.01;
+		let rescueFireBonus = 0;
+		let flavorText = '';
+		let action = {
+			forageFood: false,
+			eatFood: false,
+			gatherWater: false,
+			drinkWater: false,
+			gatherMats: false,
+			rest: false
+		};
+
+		// For smooth resource increments
+		let foodGatherRate = 0, waterGatherRate = 0, matsGatherRate = 0;
+		let foodGatherAccum = 0, waterGatherAccum = 0, matsGatherAccum = 0;
+
+		// Build order
+		const builds = [
+			{ name: 'Basic Shelter', mats: 30, time: 30, effect: () => { shelterBuilt = true; }, status: () => shelterBuilt },
+			{ name: 'Fire Pit', mats: 40, time: 40, effect: () => { firePitBuilt = true; }, status: () => firePitBuilt },
+			{ name: 'Signal Fire & Help Sign', mats: 60, time: 60, effect: () => { signalFireBuilt = true; rescueUnlocked = true; }, status: () => signalFireBuilt }
+		];
+		let currentBuildIndex = 0;
+
+		// UI elements
+		const hpBar = document.getElementById('hp-bar');
+		const hungerBar = document.getElementById('hunger-bar');
+		const thirstBar = document.getElementById('thirst-bar');
+		const staminaBar = document.getElementById('stamina-bar');
+		const foodEl = document.getElementById('food');
+		const waterEl = document.getElementById('water');
+		const matsEl = document.getElementById('mats');
+		const shelterStatusEl = document.getElementById('shelter-status');
+		const firepitStatusEl = document.getElementById('firepit-status');
+		const signalfireStatusEl = document.getElementById('signalfire-status');
+		const firetimeEl = document.getElementById('firetime');
+		const firetimeBar = document.getElementById('firetime-bar');
+		const rescueChanceEl = document.getElementById('rescue-chance');
+		const flavorEl = document.getElementById('flavor');
+		const stokeFireBtn = document.getElementById('stoke-fire-btn');
+		const buildProgress = document.getElementById('build-progress');
+		const buildBar = document.getElementById('build-bar');
+
+		// Action toggles
+		function setupToggle(id, key, flavor) {
+			document.getElementById(id).addEventListener('change', e => {
+				if (e.target.checked) {
+					// Only one action at a time
+					for (const k in action) {
+						action[k] = false;
+						document.getElementById(k.replace(/([A-Z])/g, '-$1').toLowerCase()).checked = false;
+					}
+					action[key] = true;
+					document.getElementById(id).checked = true;
+					flavorText = flavor;
+				} else {
+					action[key] = false;
+					flavorText = '';
+				}
+				updateFlavor();
+			});
+		}
+		setupToggle('forage-food', 'forageFood', 'You search for edible plants and berries...');
+		setupToggle('eat-food', 'eatFood', 'You eat food to restore hunger...');
+		setupToggle('gather-water', 'gatherWater', 'You look for water sources...');
+		setupToggle('drink-water', 'drinkWater', 'You drink water to quench thirst...');
+		setupToggle('gather-mats', 'gatherMats', 'You gather mats from the forest floor...');
+		setupToggle('rest', 'rest', 'You rest to regain stamina...');
+		setupToggle('build', 'build', 'You work on building...');
+
+		action.build = false; // add a new action flag
+
+		stokeFireBtn.addEventListener('click', () => {
+			if (!signalFireBuilt) {
+				flavorText = 'You need a Signal Fire & Help Sign to stoke a fire.';
+				updateFlavor();
+				return;
+			}
+			if (mats < 2) {
+				flavorText = 'Not enough mats to stoke the fire.';
+				updateFlavor();
+				return;
+			}
+			mats -= 2;
+			fireTime += 15;
+			if (fireTime > 30) fireTime = 30; // clamp max 30s
+			flavorText = 'You stoke the fire, extending its warmth.';
+			updateFlavor();
+			updateUI();
+		});
+
+		function updateFlavor() {
+			flavorEl.textContent = flavorText;
+		}
+
+		function updateUI() {
+			hpBar.style.width = (hp) + '%';
+			hungerBar.style.width = (hunger) + '%';
+			thirstBar.style.width = (thirst) + '%';
+			staminaBar.style.width = (stamina) + '%';
+			foodEl.textContent = food;
+			waterEl.textContent = water;
+			matsEl.textContent = mats;
+			shelterStatusEl.textContent = shelterBuilt ? 'Built' : 'Not built';
+			firepitStatusEl.textContent = firePitBuilt ? 'Built' : 'Not built';
+			signalfireStatusEl.textContent = signalFireBuilt ? 'Built' : 'Not built';
+			firetimeEl.textContent = Math.floor(fireTime);
+			firetimeBar.style.width = (fireTime / 30 * 100) + '%';
+			rescueChanceEl.textContent = rescueChance.toFixed(2);
+			// Build progress
+			if (building) {
+				buildBar.style.width = ((buildTime / buildTotal) * 100) + '%';
+			} else {
+				buildBar.style.width = '0%';
+				buildProgress.style.display = 'none';
+			}
+
+			// Enable/disable Stoke Fire button
+			stokeFireBtn.disabled = !signalFireBuilt;
+		}
+
+		function clamp(val, min, max) {
+			return Math.max(min, Math.min(max, val));
+		}
+
+		// Main game loop (runs every 0.5s)
+		setInterval(() => {
+			// Stat changes
+			let hpChange = 0;
+			let hungerChange = -0.125;
+			let thirstChange = -0.125;
+			let staminaChange = 0;
+
+			// Hunger/Thirst effects
+			if (hunger <= 0) {
+				hpChange -= 1;
+				hunger = 0;
+			}
+			if (thirst <= 0) {
+				hpChange -= 1;
+				thirst = 0;
+			}
+			if (hunger <= 0 && thirst <= 0) {
+				hpChange -= 0.5; // Additional penalty
+			}
+
+			// HP regen
+			if (hp < 100 && hunger > 0 && thirst > 0) {
+				hpChange += 0.5;
+			}
+
+			// Stamina regen
+			let staminaRegen = 0;
+			if (action.rest) {
+				staminaRegen = shelterBuilt ? 3 : 2;
+			} else {
+				let otherActive = Object.entries(action).some(([k, v]) => k !== 'rest' && v);
+				if (!otherActive) staminaRegen = 1;
+			}
+			staminaChange += staminaRegen;
+
+			// Resource gathering: +1 per tick (0.5s)
+			if (action.forageFood && stamina >= 1) {
+				staminaChange -= 1;
+				food += 1;
+				flavorText = 'You forage food (+1).';
+			}
+			if (action.gatherWater && stamina >= 1) {
+				staminaChange -= 1;
+				water += 1;
+				flavorText = 'You gather water (+1).';
+			}
+			if (action.gatherMats && stamina >= 2) {
+				staminaChange -= 2;
+				mats += 1;
+				flavorText = 'You gather mats (+1).';
+			}
+
+
+			// Eat Food
+			if (action.eatFood && food > 0 && hunger < 100) {
+				food -= 1;
+				let bonus = firePitBuilt ? 1.5 : 1;
+				hunger += bonus;
+				flavorText = firePitBuilt ? 'Warm food fills you (+1.5 Hunger).' : 'You eat food (+1 Hunger).';
+			}
+
+			// Drink Water
+			if (action.drinkWater && water > 0 && thirst < 100) {
+				water -= 1;
+				let bonus = firePitBuilt ? 1.5 : 1;
+				thirst += bonus;
+				flavorText = firePitBuilt ? 'Warm drink refreshes you (+1.5 Thirst).' : 'You drink water (+1 Thirst).';
+			}
+
+			// Building (toggle)
+			if (action.build && currentBuildIndex < builds.length) {
+				const build = builds[currentBuildIndex];
+				if (stamina >= 2 && mats > 0) {
+					staminaChange -= 2;
+					mats -= 1;
+					buildTime += 0.5;
+					buildTotal = build.time;
+					buildType = build.name;
+					flavorText = `Building ${buildType}... (${Math.floor(buildTime)}s/${buildTotal}s)`;
+					if (buildTime >= buildTotal) {
+						builds[currentBuildIndex].effect();
+						flavorText = `${buildType} built!`;
+						currentBuildIndex++;
+						buildTime = 0;
+					}
+				} else {
+					flavorText = `Building paused (need stamina or mats).`;
+				}
+			}
+
+			// Fire time
+			if (fireTime > 0) {
+				fireTime -= 0.5;
+				if (fireTime < 0) fireTime = 0;
+				if (fireTime > 30) fireTime = 30;
+
+				// Fire is burning → increase bonus
+				rescueFireBonus += 0.05 * 0.5;  // +0.05% per second
+			} else {
+				// No fire → decrease bonus
+				rescueFireBonus -= 0.10 * 0.5;  // -0.10% per second
+			}
+
+			// Clamp bonus so it doesn’t go negative
+			if (rescueFireBonus < 0) rescueFireBonus = 0;
+
+			// Rescue mechanics
+			if (rescueUnlocked) {
+				let base = rescueBaseChance * 100; // base is 1%
+				rescueChance = base + rescueFireBonus;
+
+				// Every 1s, roll for rescue
+				if (Math.floor(performance.now() / 1000) !== Math.floor((performance.now() - 500) / 1000)) {
+					if (Math.random() < rescueChance / 100) {
+						flavorText = 'You have been rescued! Congratulations!';
+						updateFlavor();
+						setTimeout(() => location.reload(), 4000);
+						return;
+					}
+				}
+			} else {
+				rescueChance = 0;
+			}
+
+
+			// Clamp stats
+			hp = clamp(hp + hpChange, 0, 100);
+			hunger = clamp(hunger + hungerChange, 0, 100);
+			thirst = clamp(thirst + thirstChange, 0, 100);
+			stamina = clamp(stamina + staminaChange, 0, 100);
+
+			// Game over
+			if (hp <= 0) {
+				flavorText = 'You have perished in the wild.';
+				updateFlavor();
+				setTimeout(() => location.reload(), 4000);
+				return;
+			}
+
+			updateUI();
+			updateFlavor();
+		}, 500);
+	</script>
+</body>
+
+</html>
