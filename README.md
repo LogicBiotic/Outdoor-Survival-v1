@@ -113,3 +113,7 @@ No setup required. Just open `index.html` in any modern browser:
 ## 📜 License
 
 MIT License – free to use, modify, and distribute.
+
+---
+
+© 2025 LogicBiotic. All rights reserved.
